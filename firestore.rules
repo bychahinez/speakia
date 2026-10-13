@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Speakia: each learner can read and write only their own data.
+// Paste into Firebase console > Firestore Database > Rules, then Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // users/{uid} = { profile: {...}, updatedAt }
+    match /users/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['profile', 'updatedAt'])
+        && request.resource.data.profile is map
+        && request.resource.data.profile.name is string
+        && request.resource.data.profile.name.size() <= 40
+        && request.resource.data.profile.level in ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+
+      // users/{uid}/attempts/{finishedAt} = one finished episode
+      match /attempts/{attemptId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['episodeId', 'role', 'stars', 'hints', 'words', 'turns', 'speakingMs', 'finishedAt'])
+          && request.resource.data.stars is int
+          && request.resource.data.stars >= 0 && request.resource.data.stars <= 3
+          && request.resource.data.episodeId is string
+          && request.resource.data.episodeId.size() <= 40;
+      }
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

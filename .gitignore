@@ -1,0 +1,31 @@
+# dependencies and build output
+node_modules/
+server/node_modules/
+.expo/
+dist/
+web-build/
+server/.wrangler/
+android/
+ios/
+
+# secrets: never commit these
+.env
+.env.*
+!.env.example
+.dev.vars
+server/.dev.vars
+*.pem
+*.key
+*.p8
+*.p12
+*.jks
+*.keystore
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+credentials.json
+
+# logs and OS files
+*.log
+.DS_Store
+Thumbs.db

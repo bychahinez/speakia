@@ -1,0 +1,29 @@
+name = "speakia-api"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+[vars]
+# Your Firebase project. Not a secret: it only says whose ID tokens to accept.
+FIREBASE_PROJECT_ID = "speakia-e70e7"
+# Change these if Groq renames its models (check console.groq.com/docs/models)
+CHAT_MODEL = "openai/gpt-oss-120b"   # llama-3.3-70b-versatile was retired by Groq on 16 Aug 2026
+STT_MODEL = "whisper-large-v3-turbo"
+
+# Fish Audio character voices. FISH_MODEL "s2.1-pro-free" is the free developer tier.
+# Pick a voice per character on fish.audio (Discover), open it, and paste its ID (from the URL or
+# the copy button). Voice IDs are not secrets. Leave one empty to use Fish Audio's default voice.
+FISH_MODEL = "s2.1-pro-free"
+FISH_VOICE_SARA = "933563129e564b19a115bedd57b7406a"
+FISH_VOICE_YACINE = "536d3a5e000945adb7038665781a4aca"
+FISH_VOICE_BENALI = "e0e2468ce2d746c1b20a4414435f6f48"
+FISH_VOICE_HADDAD = "9a9cf47702da476aa4629e2506d4a857"
+
+# Secrets are NOT stored here. Set them with:
+#   npx wrangler secret put GROQ_API_KEY
+#   npx wrangler secret put FISH_API_KEY
+
+# Stores voiced lines so each one is generated only once (shared by all learners).
+# Created with:  npx wrangler kv namespace create AUDIO
+[[kv_namespaces]]
+binding = "AUDIO"
+id = "8794806d33284f70aab7a3fe56394ffc"
