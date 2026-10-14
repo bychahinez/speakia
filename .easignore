@@ -1,0 +1,29 @@
+# Files EAS Build does NOT upload. Same as .gitignore, except .env IS uploaded:
+# the app needs its EXPO_PUBLIC_* values (Firebase config, server URL) at build time.
+# Those values are public by design (they end up inside the app anyway). Real secrets
+# (Groq, Fish Audio) live only in Cloudflare and never in .env.
+
+node_modules/
+server/
+.expo/
+dist/
+web-build/
+android/
+ios/
+
+.env.local
+.dev.vars
+*.pem
+*.key
+*.p8
+*.p12
+*.jks
+*.keystore
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+credentials.json
+
+*.log
+.DS_Store
+Thumbs.db
