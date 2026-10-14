@@ -24,7 +24,7 @@ export default function LevelStep() {
   };
 
   const next = async () => {
-    if (unsure) return router.push(edit ? '/onboarding/test?edit=1' : '/onboarding/test');
+    if (unsure) return router.push(edit ? '/onboarding/quiz?edit=1' : '/onboarding/quiz');
     if (!level) return;
     Object.assign(draft, { level, levelSource: 'manual' });
     if (edit) {
@@ -66,7 +66,7 @@ export default function LevelStep() {
         <View style={s.bulb}><Icon name="bulb" size={24} color="#B98300" /></View>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={s.unsureTitle}>I’m not sure</Text>
-          <Text style={k.tileSub as object}>Take a quick speaking test · 4 questions</Text>
+          <Text style={k.tileSub as object}>Quiz + speaking test · about 12 minutes</Text>
         </View>
         {unsure && <View style={s.tick}><Icon name="check" size={13} color="#fff" stroke={3.4} /></View>}
       </Pressable>

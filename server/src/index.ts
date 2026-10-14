@@ -4,6 +4,7 @@
  *   POST /transcribe   multipart "file" (audio)  -> { text }
  *   POST /turn         JSON (see TurnRequest)    -> TurnResult
  *   GET  /speak?who=sara&text=...&slow=1          -> audio/mpeg (Fish Audio voice for that character)
+ *   POST /assess       JSON (see AssessRequest)  -> CEFR speaking evaluation of the placement answers
  *
  * Every request must carry a Firebase ID token (Authorization: Bearer <token>) from a signed-in
  * learner (email account or anonymous guest). The token is checked against Google's public keys,
@@ -86,12 +87,13 @@ export default {
     const url = new URL(req.url);
     if (req.method === 'GET' && url.pathname === '/') return json({ ok: true, service: 'speakia-api' });
     const route = `${req.method} ${url.pathname}`;
-    if (!['POST /transcribe', 'POST /turn', 'GET /speak'].includes(route)) return json({ error: 'Not found' }, 404);
+    if (!['POST /transcribe', 'POST /turn', 'GET /speak', 'POST /assess'].includes(route)) return json({ error: 'Not found' }, 404);
     if (!(await verifiedUser(req, env))) return json({ error: 'Sign in to use voice and AI' }, 401);
 
     try {
       if (route === 'POST /transcribe') return await transcribe(req, env);
       if (route === 'POST /turn') return await turn(req, env);
+      if (route === 'POST /assess') return await assess(req, env);
       return await speak(url, env, ctx);
     } catch (e) {
       return json({ error: e instanceof Error ? e.message : 'Server error' }, 500);
@@ -104,8 +106,10 @@ async function transcribe(req: Request, env: Env) {
   const file = form.get('file');
   if (!file || typeof file === 'string') return json({ error: 'Missing audio file' }, 400);
 
+  // keep the uploaded name: its extension (.m4a on phones, .webm on the web) tells Whisper the format
+  const name = (file as File).name && /\.[a-z0-9]{2,5}$/i.test((file as File).name) ? (file as File).name : 'speech.m4a';
   const out = new FormData();
-  out.append('file', file, 'speech.m4a');
+  out.append('file', file, name);
   out.append('model', env.STT_MODEL || 'whisper-large-v3-turbo');
   out.append('response_format', 'json');
   // A short prompt helps Whisper keep English and not "translate" French words students mix in.
@@ -116,7 +120,11 @@ async function transcribe(req: Request, env: Env) {
     headers: { authorization: `Bearer ${env.GROQ_API_KEY}` },
     body: out,
   });
-  if (!res.ok) return json({ error: `Transcription failed: ${await res.text()}` }, 502);
+  if (!res.ok) {
+    const detail = await res.text();
+    console.log(`whisper failed ${res.status}: ${detail.slice(0, 300)} (file ${(file as File).type || '?'}, ${(file as File).size ?? '?'} bytes)`);
+    return json({ error: `Transcription failed: ${detail}` }, 502);
+  }
   const data = (await res.json()) as { text?: string };
   return json({ text: (data.text ?? '').trim() });
 }
@@ -284,4 +292,118 @@ async function speak(url: URL, env: Env, ctx: ExecutionContext) {
 async function sha256(s: string) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ---------- speaking evaluation (placement test) ----------
+
+type AssessRequest = {
+  answers: { question: string; text: string; seconds?: number }[];
+};
+
+const CEFR = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
+type Cefr = (typeof CEFR)[number];
+const isCefr = (v: unknown): v is Cefr => typeof v === 'string' && (CEFR as readonly string[]).includes(v);
+
+// Short working summary of the CEFR qualitative aspects of spoken language (range, accuracy,
+// fluency, coherence). It guides the model; it is not the official descriptor text.
+const RUBRIC = `CEFR spoken language, summarised per level:
+RANGE (vocabulary and structures): A1 isolated words and memorised phrases; A2 basic sentence patterns, everyday words, limited; B1 enough language to talk about familiar topics with some circumlocution; B2 clear descriptions and viewpoints, some complex sentences, varied vocabulary; C1 broad range, flexible, precise, idiomatic.
+ACCURACY (grammar control): A1 very limited control of simple forms; A2 simple structures but systematic basic mistakes (e.g. "I am agree", missing past tense); B1 reasonably accurate in familiar contexts, mistakes occur but meaning is clear; B2 good control, few errors that do not cause misunderstanding; C1 consistently high accuracy, rare slips.
+FLUENCY: A1 many pauses, very short utterances; A2 short contributions, frequent pauses and false starts; B1 keeps going with noticeable pauses for planning; B2 fairly even tempo, few long pauses; C1 fluent and spontaneous. Use words-per-minute when given: under 60 A1-A2, 60-100 A2-B1, 100-130 B1-B2, over 130 B2+.
+COHERENCE (linking ideas): A1 "and", "then"; A2 simple connectors "but", "because"; B1 a linear sequence of points with common linkers; B2 a range of linking words to mark relationships clearly; C1 well-organised, varied cohesive devices.`;
+
+type Criterion = { level: Cefr | null; note: string };
+
+async function assess(req: Request, env: Env) {
+  const r = (await req.json()) as AssessRequest;
+  const answers = (r.answers ?? []).slice(0, 6).map((a) => ({
+    question: String(a.question ?? '').slice(0, 200),
+    text: String(a.text ?? '').slice(0, 1500),
+    seconds: typeof a.seconds === 'number' && a.seconds > 0 ? Math.round(a.seconds) : undefined,
+  }));
+  if (!answers.length) return json({ error: 'Missing answers' }, 400);
+
+  const listing = answers
+    .map((a, i) => {
+      const words = a.text.split(/\s+/).filter(Boolean).length;
+      const timing = a.seconds
+        ? `Spoken in ${a.seconds}s (${words} words, about ${Math.round((words / a.seconds) * 60)} words per minute)`
+        : `Typed, not spoken (${words} words): fluency cannot be judged from it`;
+      return `Answer ${i + 1}. Question: "${a.question}"\nTranscript: "${a.text}"\n${timing}`;
+    })
+    .join('\n\n');
+
+  const system = `You are an experienced English teacher assessing a university student's SPOKEN English for a placement test, using the CEFR. You only see transcripts (speech-to-text) plus timing, so you cannot judge pronunciation: never comment on it. Speech-to-text may smooth over small slips, so do not invent mistakes that are not in the transcript.
+
+${RUBRIC}
+
+Assess each criterion separately from the evidence, then give one overall level (usually the level most criteria agree on; never higher than the accuracy level plus one step). If there is too little speech to judge (very short or off-topic answers), set "confident": false.
+
+Return ONLY a JSON object:
+{
+ "level": "A1"|"A2"|"B1"|"B2"|"C1"|"C2",
+ "confident": boolean,
+ "criteria": {
+   "range": {"level": "...", "note": "<one short sentence, addressed to the student as 'you'>"},
+   "accuracy": {"level": "...", "note": "..."},
+   "fluency": {"level": "...", "note": "..."},
+   "coherence": {"level": "...", "note": "..."}
+ },
+ "strengths": ["<max 2 short points>"],
+ "improve": ["<max 2 short, practical points>"],
+ "corrections": [{"said": "<exact short phrase from a transcript>", "better": "<corrected phrase>"}]
+}
+"corrections": at most 3 real mistakes, empty array if none. Keep every text short, friendly and concrete.`;
+
+  const res = await fetch(`${GROQ}/chat/completions`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${env.GROQ_API_KEY}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: env.CHAT_MODEL || 'openai/gpt-oss-120b',
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: listing },
+      ],
+      temperature: 0.2,
+      reasoning_effort: 'medium',
+      include_reasoning: false,
+      max_completion_tokens: 2048,
+      response_format: { type: 'json_object' },
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    console.log(`groq assess failed ${res.status}: ${detail.slice(0, 300)}`);
+    return json({ error: `AI failed: ${detail}` }, 502);
+  }
+  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  let out: Record<string, any> = {};
+  try {
+    out = JSON.parse(data.choices?.[0]?.message?.content ?? '{}');
+  } catch {
+    return json({ error: 'The AI returned an unreadable evaluation' }, 502);
+  }
+  if (!isCefr(out.level)) return json({ error: 'The AI returned no level' }, 502);
+
+  const criterion = (c: any): Criterion => ({
+    level: isCefr(c?.level) ? c.level : null,
+    note: typeof c?.note === 'string' ? c.note.slice(0, 200) : '',
+  });
+  const strings = (v: any, n: number) =>
+    Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, n).map((x: string) => x.slice(0, 160)) : [];
+  return json({
+    level: out.level,
+    confident: out.confident !== false,
+    criteria: {
+      range: criterion(out.criteria?.range),
+      accuracy: criterion(out.criteria?.accuracy),
+      fluency: criterion(out.criteria?.fluency),
+      coherence: criterion(out.criteria?.coherence),
+    },
+    strengths: strings(out.strengths, 2),
+    improve: strings(out.improve, 2),
+    corrections: Array.isArray(out.corrections)
+      ? out.corrections.filter((c: any) => typeof c?.said === 'string' && typeof c?.better === 'string').slice(0, 3)
+      : [],
+  });
 }

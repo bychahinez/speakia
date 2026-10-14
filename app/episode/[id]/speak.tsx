@@ -44,7 +44,7 @@ export default function Speak() {
   const [error, setError] = useState('');
   const [profile, setProfile] = useState<{ level: Level; major: string; name: string }>({ level: 'B1', major: 'Computer Science / IT', name: '' });
 
-  const stats = useRef({ hints: 0, words: 0, turns: 0, speakingMs: 0, corrections: [] as TurnResult['corrections'] });
+  const stats = useRef({ hints: 0, words: 0, turns: 0, spokenTurns: 0, speakingMs: 0, corrections: [] as TurnResult['corrections'] });
   const alive = useRef(true);
   const recStart = useRef(0);
   const scroll = useRef<ScrollView>(null);
@@ -141,7 +141,13 @@ export default function Speak() {
       }
       await answer(text, ms);
     } catch (e) {
-      setError('Something went wrong with the recording. Try again, or type.');
+      const why = e instanceof Error ? e.message : String(e);
+      console.warn('[speakia] recording failed:', why);
+      setError(
+        why.startsWith('Sign in')
+          ? 'You’re not signed in, so your answer can’t be heard. Sign in from Me, or type your answer.'
+          : 'We couldn’t turn your answer into text. Try again, or type it.'
+      );
       setPhase('you');
     }
   };
@@ -156,6 +162,7 @@ export default function Speak() {
     stats.current.turns = turn;
     stats.current.words += text.split(/\s+/).filter(Boolean).length;
     stats.current.speakingMs += spokenMs;
+    if (spokenMs > 0) stats.current.spokenTurns += 1;
     try {
       const r = await nextTurn({ episode: ep, role, level: profile.level, major: profile.major, learnerName: profile.name, history: newHistory, turn });
       if (!alive.current) return;
@@ -165,7 +172,7 @@ export default function Speak() {
       setHintLevel(0);
       setHistory((h) => [...h, { from: 'partner', text: r.reply }]);
       const finished = r.done || turn >= ep.maxTurns + 2;
-      speakPartner(r.reply, () => (finished ? finish() : setPhase('you')), true);
+      speakPartner(r.reply, () => (finished ? finish(!!r.done, r.reply) : setPhase('you')), true);
     } catch (e) {
       const why = e instanceof Error ? e.message : String(e);
       console.warn('[speakia] AI turn failed:', why);
@@ -196,7 +203,8 @@ export default function Speak() {
     setOfferHint(true);
   };
 
-  const finish = () => {
+  /** `convinced`: the AI judged the learner's goal reached; `lastLine`: the partner's final reply. */
+  const finish = (convinced: boolean, lastLine: string) => {
     const st = stats.current;
     router.replace({
       pathname: '/episode/[id]/result',
@@ -208,6 +216,9 @@ export default function Speak() {
         words: String(st.words),
         turns: String(st.turns),
         ms: String(st.speakingMs),
+        spoken: String(st.spokenTurns),
+        convinced: convinced ? '1' : '0',
+        last: lastLine,
         corrections: JSON.stringify(st.corrections.slice(0, 2)),
       },
     });

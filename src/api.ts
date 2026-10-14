@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+import { File } from 'expo-file-system';
 import { CAST } from './content/cast';
 import { Episode, Hints, RoleOption } from './content/episodes';
 import { Level, idToken } from './storage';
@@ -33,8 +35,14 @@ const band = (l: Level) => (l === 'A1' || l === 'A2' ? 'Beginner' : l === 'B1' |
 export async function transcribe(uri: string): Promise<string> {
   if (!API) throw new Error('No server configured');
   const form = new FormData();
-  // React Native accepts this {uri,name,type} object as a file part
-  form.append('file', { uri, name: 'speech.m4a', type: 'audio/m4a' } as unknown as Blob);
+  if (Platform.OS === 'web') {
+    // the browser recorder gives a blob: URL
+    form.append('file', await (await fetch(uri)).blob(), 'speech.webm');
+  } else {
+    // Expo's fetch only uploads real file objects (the old {uri, name, type} form is rejected with
+    // "Unsupported FormDataPart implementation"). The file keeps its name, e.g. recording-123.m4a.
+    form.append('file', new File(uri) as unknown as Blob);
+  }
   const res = await fetch(`${API}/transcribe`, { method: 'POST', headers: await authHeaders(), body: form });
   if (!res.ok) throw new Error(`Transcription failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
   const data = (await res.json()) as { text?: string };
@@ -107,4 +115,28 @@ function demoTurn(role: RoleOption, history: ChatLine[], turn: number, maxTurns:
       example: 'That’s true, but we can still finish it in two weeks if we keep it simple.',
     },
   };
+}
+
+// ---------- placement test: CEFR speaking evaluation ----------
+
+export type CriterionResult = { level: Level | null; note: string };
+export type Assessment = {
+  level: Level;
+  confident: boolean;
+  criteria: { range: CriterionResult; accuracy: CriterionResult; fluency: CriterionResult; coherence: CriterionResult };
+  strengths: string[];
+  improve: string[];
+  corrections: { said: string; better: string }[];
+};
+
+/** Ask the server's AI teacher to grade the spoken answers against CEFR speaking criteria. */
+export async function assessSpeaking(answers: { question: string; text: string; seconds?: number }[]): Promise<Assessment> {
+  if (!API) throw new Error('No server configured');
+  const res = await fetch(`${API}/assess`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(await authHeaders()) },
+    body: JSON.stringify({ answers }),
+  });
+  if (!res.ok) throw new Error(`Evaluation failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+  return (await res.json()) as Assessment;
 }

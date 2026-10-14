@@ -15,13 +15,17 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
       onPress={onPress}
       disabled={disabled || loading}
+      hitSlop={6}
+      // The pressed look must not change the button's size: a layout change mid-tap makes Android
+      // re-measure while the finger is down and can cancel the press (taps "needing" several tries).
       style={({ pressed }) => [
         s.btn,
-        { backgroundColor: bg, borderBottomColor: under, opacity: disabled ? 0.45 : 1 },
+        { backgroundColor: bg, borderBottomColor: under, opacity: disabled ? 0.45 : pressed ? 0.88 : 1 },
         variant === 'secondary' && { borderWidth: 2, borderColor: C.skyTint, borderBottomWidth: 2 },
-        pressed && { transform: [{ translateY: 3 }], borderBottomWidth: variant === 'secondary' ? 2 : 2 },
+        pressed && { transform: [{ translateY: 2 }] },
         style,
       ]}
     >

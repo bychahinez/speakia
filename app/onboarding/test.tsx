@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState,
@@ -8,16 +8,18 @@ import Character from '../../src/components/Character';
 import { Icon } from '../../src/components/Icon';
 import { Heading, Screen, StepBar, TopBar, k } from '../../src/components/kit';
 import { Button } from '../../src/components/ui';
-import { isDemo, transcribe } from '../../src/api';
+import { assessSpeaking, isDemo, transcribe } from '../../src/api';
 import { draft } from '../../src/draft';
-import { QUESTIONS, estimateLevel } from '../../src/placement';
+import { Level } from '../../src/storage';
+import { QUESTIONS, combineLevel, estimateLevel, lastQuiz, setAssessment } from '../../src/placement';
 import { C, F, shadow } from '../../src/theme';
 
-type Phase = 'idle' | 'recording' | 'processing' | 'review' | 'nospeech' | 'error';
+type Phase = 'idle' | 'recording' | 'processing' | 'review' | 'nospeech' | 'error' | 'assessing';
 const MAX_MS = 45_000;
 
 // Kept outside the component so leaving and coming back preserves finished answers.
 const answers: string[] = [];
+const seconds: (number | undefined)[] = []; // speaking time per answer (undefined when typed)
 
 const mmss = (ms: number) => {
   const sec = Math.min(45, Math.floor(ms / 1000));
@@ -69,6 +71,7 @@ export default function PlacementTest() {
   };
 
   const stop = async () => {
+    const spokenMs = elapsed;
     try {
       await recorder.stop();
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
@@ -80,14 +83,22 @@ export default function PlacementTest() {
         return;
       }
       setText(t);
+      seconds[q] = spokenMs / 1000;
       setPhase('review');
-    } catch {
-      setMessage('We couldn’t reach the server. Check your connection and try again.');
+    } catch (e) {
+      const why = e instanceof Error ? e.message : String(e);
+      console.warn('[speakia] test recording failed:', why);
+      setMessage(
+        why.startsWith('Sign in')
+          ? 'You’re not signed in, so your answer can’t be checked. Sign in, then try again, or type your answer.'
+          : 'We couldn’t turn your answer into text. Try again, or type it.'
+      );
       setPhase('error');
     }
   };
 
   const retry = () => {
+    seconds[q] = undefined;
     setText('');
     setPhase('idle');
     setMessage('');
@@ -104,12 +115,34 @@ export default function PlacementTest() {
       setPhase(answers[n] ? 'review' : 'idle');
       return;
     }
-    const est = estimateLevel(answers);
+    finish();
+  };
+
+  /** Send all answers to the AI teacher; fall back to the quick on-phone estimate if it can't answer. */
+  const finish = async () => {
+    setPhase('assessing');
+    const given = QUESTIONS.map((Q, i) => ({ question: `${Q.title} ${Q.sub}`, text: answers[i] ?? '', seconds: seconds[i] }));
+    let speaking: Level;
+    let confident: boolean;
+    try {
+      const a = await assessSpeaking(given);
+      setAssessment(a);
+      speaking = a.level;
+      confident = a.confident;
+    } catch (e) {
+      console.warn('[speakia] AI evaluation failed, using the quick estimate:', e instanceof Error ? e.message : e);
+      setAssessment(null);
+      const est = estimateLevel(answers);
+      speaking = est.level;
+      confident = est.confident;
+    }
     answers.length = 0;
-    if (est.confident) Object.assign(draft, { level: est.level, levelSource: 'test' });
+    seconds.length = 0;
+    const level = combineLevel(speaking, lastQuiz);
+    if (confident) Object.assign(draft, { level, levelSource: 'test' });
     router.replace({
       pathname: '/onboarding/result',
-      params: { level: est.level, low: est.confident ? undefined : '1', edit },
+      params: { level, speaking, low: confident ? undefined : '1', edit },
     });
   };
 
@@ -123,6 +156,19 @@ export default function PlacementTest() {
   const last5 = phase === 'recording' && elapsed >= MAX_MS - 5000;
   const Q = QUESTIONS[q];
 
+  if (phase === 'assessing') {
+    return (
+      <Screen top={<TopBar onBack={() => {}} />}>
+        <View style={s.assessing}>
+          <Character who="sara" size={150} />
+          <ActivityIndicator color={C.skyInk} size="large" />
+          <Text style={[k.title, { fontSize: 22, textAlign: 'center' }]}>Checking your answers…</Text>
+          <Text style={[k.sub, { textAlign: 'center' }]}>Our AI teacher is looking at your grammar, vocabulary, fluency and how you link your ideas.</Text>
+        </View>
+      </Screen>
+    );
+  }
+
   return (
     <Screen
       top={
@@ -133,7 +179,7 @@ export default function PlacementTest() {
       }
       footer={<Button label={q === QUESTIONS.length - 1 ? 'See my level' : 'Next question'} onPress={next} disabled={!canNext} />}
     >
-      <Heading kicker={`Question ${q + 1} of ${QUESTIONS.length}`} title="Find your speaking level" />
+      <Heading kicker={`Part 2 · Speaking · Question ${q + 1} of ${QUESTIONS.length}`} title="Now, speak" />
 
       <View style={s.promptRow}>
         <Character who="sara" size={84} talking={false} />
@@ -225,4 +271,5 @@ const s = StyleSheet.create({
   timer: { fontFamily: F.heavy, fontSize: 14, color: C.navy, minHeight: 20 },
   retry: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8 },
   retryText: { fontFamily: F.heavy, fontSize: 14, color: C.skyInk },
+  assessing: { alignItems: 'center', gap: 16, paddingTop: 40 },
 });

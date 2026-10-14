@@ -12,7 +12,8 @@ import { C, F } from '../../../src/theme';
 /** Screen 15 · Result: stars (= independence), real numbers, one thing to say better. */
 export default function Result() {
   const p = useLocalSearchParams<{
-    id: string; player: CastId; partner: CastId; hints: string; words: string; turns: string; ms: string; corrections: string;
+    id: string; player: CastId; partner: CastId; hints: string; words: string; turns: string; ms: string;
+    spoken?: string; convinced?: string; last?: string; corrections: string;
   }>();
   const ep = getEpisode(p.id)!;
   const hints = Number(p.hints ?? 0);
@@ -35,6 +36,10 @@ export default function Result() {
 
   const next = EPISODES.find((e) => e.level === ep.level + 1);
   const sec = Math.round(ms / 1000);
+  const partnerName = CAST[p.partner].shortName;
+  const convinced = p.convinced !== '0'; // older links without the flag count as convinced
+  const typedTurns = Math.max(0, turns - Number(p.spoken ?? turns));
+  const tips = nextSteps({ stars, hints, convinced, typedTurns, turns, wordsPerTurn: words / turns, partnerName });
 
   return (
     <SafeAreaView style={s.fill}>
@@ -46,14 +51,14 @@ export default function Result() {
             ))}
           </View>
           <Label>{`Level ${ep.level} complete · ${label}`}</Label>
-          <Title style={{ textAlign: 'center' }}>{`You convinced ${CAST[p.partner].shortName}.`}</Title>
+          <Title style={{ textAlign: 'center' }}>{convinced ? `You convinced ${partnerName}.` : 'Scene complete.'}</Title>
         </View>
 
         <View style={s.partnerRow}>
           <Character who={p.partner} size={80} happy />
           <View style={s.bubble}>
             <Text style={[s.who, { color: CAST[p.partner].dot === C.sun ? '#B98300' : C.mintDark }]}>{CAST[p.partner].shortName.toUpperCase()}</Text>
-            <Text style={s.bubbleText}>Okay, deal. Nice arguments!</Text>
+            <Text style={s.bubbleText}>{p.last || (convinced ? 'Okay, deal. Nice arguments!' : 'Let’s talk about it again later.')}</Text>
           </View>
         </View>
 
@@ -66,7 +71,7 @@ export default function Result() {
         <Card style={{ gap: 8 }}>
           <Text style={s.cardTitle}>Say it better</Text>
           {corrections.length === 0 ? (
-            <Text style={s.better}>No big mistakes this time. Try the level again without hints for 3 stars.</Text>
+            <Text style={s.better}>No mistakes spotted in your answers.</Text>
           ) : (
             corrections.map((c, i) => (
               <View key={i} style={{ gap: 2 }}>
@@ -75,6 +80,13 @@ export default function Result() {
               </View>
             ))
           )}
+        </Card>
+
+        <Card style={{ gap: 6 }}>
+          <Text style={s.cardTitle}>Your next step</Text>
+          {tips.map((t) => (
+            <Text key={t} style={s.tip}>{t}</Text>
+          ))}
         </Card>
 
         {next && (
@@ -91,6 +103,31 @@ export default function Result() {
       </View>
     </SafeAreaView>
   );
+}
+
+/** Up to two pieces of advice that match what actually happened in this scene. */
+function nextSteps(r: {
+  stars: number; hints: number; convinced: boolean; typedTurns: number; turns: number; wordsPerTurn: number; partnerName: string;
+}): string[] {
+  const tips: string[] = [];
+  if (r.hints > 0) {
+    tips.push(
+      `You used ${r.hints} hint${r.hints > 1 ? 's' : ''}. Answer without hints next time to get ${r.stars === 2 ? 'the third star' : 'more stars'}.`
+    );
+  }
+  if (!r.convinced) tips.push(`${r.partnerName} isn’t convinced yet. Give two clear reasons, each with “because”, before the scene ends.`);
+  if (r.typedTurns > 0) {
+    tips.push(
+      r.typedTurns === r.turns
+        ? 'You typed every answer. Try saying them out loud next time: that’s what builds your speaking.'
+        : `You typed ${r.typedTurns} of your ${r.turns} answers. Try speaking all of them next time.`
+    );
+  }
+  if (r.wordsPerTurn < 8) tips.push(`Your answers were short (about ${Math.round(r.wordsPerTurn)} words). Add a reason or an example to say more.`);
+  if (tips.length === 0) {
+    tips.push(`Perfect run: no hints, and you convinced ${r.partnerName}. Replay from the other side of the debate, or go on to the next episode.`);
+  }
+  return tips.slice(0, 2);
 }
 
 function PopStar({ on, big, delay }: { on: boolean; big: boolean; delay: number }) {
@@ -122,6 +159,7 @@ const s = StyleSheet.create({
   cardTitle: { fontFamily: F.display, fontSize: 18, color: C.navy },
   said: { fontFamily: F.semi, fontSize: 14, color: C.muted, textDecorationLine: 'line-through' },
   better: { fontFamily: F.bold, fontSize: 15, color: C.navy, lineHeight: 21 },
+  tip: { fontFamily: F.semi, fontSize: 14, color: C.navy, lineHeight: 20 },
   unlock: { backgroundColor: C.mintTint, borderRadius: 18, padding: 14 },
   unlockText: { fontFamily: F.body, fontSize: 13, color: C.navy, lineHeight: 19 },
 });
