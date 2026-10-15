@@ -19,11 +19,8 @@
     --phone-w: 390px; --phone-h: 844px;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
-  body {
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: var(--navy); background: var(--cream);
-    overflow-x: hidden;
-  }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: var(--navy); background: var(--cream); }
   .bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
   .blob { position: absolute; border-radius: 50%; filter: blur(60px); opacity: .55; }
   .blob.a { width: 520px; height: 520px; background: var(--sky-tint); top: -140px; left: -120px; }
@@ -31,28 +28,29 @@
   .blob.c { width: 300px; height: 300px; background: var(--sun-tint); top: 40%; left: 48%; }
 
   main {
-    position: relative; z-index: 1; min-height: 100%; display: flex; align-items: center; justify-content: center;
-    gap: clamp(32px, 6vw, 96px); padding: 32px 24px;
+    position: relative; z-index: 1; height: 100%; display: flex; align-items: center; justify-content: center;
+    gap: clamp(28px, 6vw, 96px); padding: 24px;
   }
 
   /* ---------- side panel ---------- */
-  .panel { max-width: 380px; display: flex; flex-direction: column; gap: 22px; }
+  .panel { max-width: 380px; display: flex; flex-direction: column; gap: clamp(10px, 2.4vh, 22px); }
   .brand { display: flex; align-items: center; gap: 12px; }
   .brand img { width: 52px; height: 52px; border-radius: 14px; box-shadow: 0 8px 20px rgba(47,91,219,.25); }
   .brand span { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 30px; letter-spacing: -1px; }
-  h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 3.4vw, 46px); line-height: 1.04; letter-spacing: -1.2px; margin: 0; }
+  h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(28px, min(3.4vw, 5.4vh), 46px); line-height: 1.04; letter-spacing: -1.2px; margin: 0; }
   h1 em { font-style: normal; color: var(--ink); }
-  .lead { font-size: 16px; line-height: 1.6; color: var(--muted); margin: 0; }
-  .steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .lead { font-size: clamp(14px, 1.9vh, 16px); line-height: 1.55; color: var(--muted); margin: 0; }
+  .steps { list-style: none; padding: 0; margin: 0; display: grid; gap: clamp(6px, 1.2vh, 10px); }
   .steps li { display: flex; gap: 12px; align-items: center; font-weight: 700; font-size: 15px; }
   .steps b { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; color: var(--white); font-size: 13px; flex: none; }
   .codes { display: flex; gap: 14px; flex-wrap: wrap; }
-  .code { background: var(--white); border-radius: 20px; padding: 14px; width: 172px; box-shadow: 0 10px 30px rgba(30,36,64,.08); display: flex; flex-direction: column; gap: 8px; align-items: center; text-align: center; }
-  .code .qr { width: 132px; height: 132px; display: grid; place-items: center; }
-  .code .qr svg, .code .qr img { width: 132px; height: 132px; }
+  .code { background: var(--white); border-radius: 20px; padding: clamp(10px, 1.6vh, 14px); width: calc(var(--qr) + 40px); box-shadow: 0 10px 30px rgba(30,36,64,.08); display: flex; flex-direction: column; gap: 8px; align-items: center; text-align: center; }
+  :root { --qr: clamp(84px, 15vh, 132px); }
+  .code .qr { width: var(--qr); height: var(--qr); display: grid; place-items: center; }
+  .code .qr svg, .code .qr img { width: var(--qr); height: var(--qr); }
   .code strong { font-size: 14px; }
   .code small { font-size: 12px; color: var(--muted); line-height: 1.35; }
-  .code .soon { width: 132px; height: 132px; border-radius: 14px; background: var(--sun-tint); display: grid; place-items: center; font-size: 12px; font-weight: 800; color: var(--muted); padding: 10px; }
+  .code .soon { width: var(--qr); height: var(--qr); border-radius: 14px; background: var(--sun-tint); display: grid; place-items: center; font-size: 12px; font-weight: 800; color: var(--muted); padding: 10px; }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; }
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 20px; border-radius: 16px; font-weight: 800; font-size: 15px; text-decoration: none; border: 0; cursor: pointer; font-family: inherit; }
   .btn.primary { background: var(--ink); color: var(--white); box-shadow: 0 5px 0 #2347B5; }
@@ -126,9 +124,13 @@
   .homebar.dark i { background: rgba(30,36,64,.55); }
   .homebar:focus-visible i { outline: 2px solid var(--sun); outline-offset: 3px; }
 
+  /* short laptop screens: keep the essentials only */
+  @media (max-height: 720px) and (min-width: 761px) { .lead { display: none; } }
+  @media (max-height: 600px) and (min-width: 761px) { .steps, .note { display: none; } }
+
   /* small screens: no phone-in-a-phone, just open the app */
   @media (max-width: 760px) {
-    main { flex-direction: column; align-items: stretch; gap: 24px; }
+    main { flex-direction: column; align-items: stretch; justify-content: center; gap: clamp(14px, 3vh, 24px); }
     .stage { display: none; }
     .panel { max-width: none; }
     .desktop-only { display: none; }
@@ -171,7 +173,6 @@
     </div>
 
     <div class="actions">
-      <a class="btn ghost desktop-only" id="openFull" href="#" target="_blank" rel="noopener">Open full screen</a>
       <a class="btn ghost" id="apkLink" href="#">Download APK</a>
     </div>
     <p class="note desktop-only">Tap the <strong>Speakia</strong> icon on the phone to start. Allow the microphone when your browser asks, so you can speak.</p>
@@ -267,7 +268,7 @@
   // ---- fit the phone to the window height (the app inside always sees a 390×844 phone) ----
   const fit = () => {
     const s = Math.min(1, (innerHeight - 48) / 844, (innerWidth * 0.5) / 390);
-    document.documentElement.style.setProperty('--scale', Math.max(0.55, s).toFixed(3));
+    document.documentElement.style.setProperty('--scale', Math.max(0.3, s).toFixed(3));
   };
   fit();
   addEventListener('resize', fit);
@@ -333,7 +334,6 @@
     el.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
   };
   qr(document.getElementById('qrWeb'), appUrl);
-  document.getElementById('openFull').href = appUrl;
   document.getElementById('openMobile').href = appUrl;
 
   const apkLink = document.getElementById('apkLink');
