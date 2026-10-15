@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '../../src/components/Character';
@@ -9,6 +9,7 @@ import { Button } from '../../src/components/ui';
 import { isDemo } from '../../src/api';
 import { Profile, deleteEverything, getAccountEmail, getProfile, levelName, signOut, updateProfile } from '../../src/storage';
 import { C, F, shadow } from '../../src/theme';
+import { Dialog } from '../../src/dialog';
 
 const GOALS = ['Presentations', 'Group work', 'Internship interviews', 'Social confidence'];
 
@@ -33,13 +34,13 @@ export default function Me() {
   };
 
   const logout = () =>
-    Alert.alert('Log out?', 'Your progress is saved in your account. Sign in again on any phone to continue.', [
+    Dialog.alert('Log out?', 'Your progress is saved in your account. Sign in again on any phone to continue.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Log out', style: 'destructive', onPress: async () => { await signOut(); router.replace('/'); } },
     ]);
 
   const deleteAll = () =>
-    Alert.alert('Delete all data?', 'This deletes your account, profile and progress from this phone and from our servers. It cannot be undone.', [
+    Dialog.alert('Delete all data?', 'This deletes your account, profile and progress from this phone and from our servers. It cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -48,7 +49,7 @@ export default function Me() {
           const r = await deleteEverything();
           setSheet(null);
           if (r === 'relogin') {
-            Alert.alert('Sign in again to delete', 'For your security, log out, sign in again, then delete your account right away.');
+            Dialog.alert('Sign in again to delete', 'For your security, log out, sign in again, then delete your account right away.');
             return;
           }
           router.replace('/');

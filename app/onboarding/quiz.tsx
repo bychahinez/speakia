@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Heading, Screen, StepBar, TopBar, k } from '../../src/components/kit';
 import { Button } from '../../src/components/ui';
 import { B1_QUIZ, PARTS, TEXTS } from '../../src/content/b1Quiz';
 import { clearQuiz, scoreQuiz } from '../../src/placement';
 import { C, F, shadow } from '../../src/theme';
+import { Dialog } from '../../src/dialog';
 
 const LETTERS = ['A', 'B', 'C', 'D'];
 
@@ -39,7 +40,7 @@ export default function Quiz() {
 
   const back = () => {
     if (i > 0) return setI(i - 1);
-    Alert.alert('Leave the test?', 'Your answers will not be kept.', [
+    Dialog.alert('Leave the test?', 'Your answers will not be kept.', [
       { text: 'Keep going', style: 'cancel' },
       { text: 'Leave', style: 'destructive', onPress: () => router.back() },
     ]);

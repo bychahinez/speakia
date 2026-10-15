@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView,
+  ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView,
   StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -18,6 +18,7 @@ import { ChatLine, isDemo, nextTurn, transcribe, TurnResult } from '../../../src
 import { getProfile, Level } from '../../../src/storage';
 import { say, stopSpeaking } from '../../../src/voice';
 import { C, F } from '../../../src/theme';
+import { Dialog } from '../../../src/dialog';
 
 type Phase = 'partner' | 'you' | 'recording' | 'thinking';
 const MAX_MS = 45_000;       // auto-stop a recording at 45 s
@@ -225,7 +226,7 @@ export default function Speak() {
   };
 
   const leave = () =>
-    Alert.alert('Leave this level?', 'Your answers in this level will not be saved.', [
+    Dialog.alert('Leave this level?', 'Your answers in this level will not be saved.', [
       { text: 'Keep playing', style: 'cancel' },
       { text: 'Leave', style: 'destructive', onPress: () => router.back() },
     ]);

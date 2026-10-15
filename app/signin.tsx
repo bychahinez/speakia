@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Button } from '../src/components/ui';
 import { Divider, Field, GoogleButton, Heading, Screen, Sheet, TopBar, k } from '../src/components/kit';
 import { resetPassword, signIn } from '../src/storage';
 import { C, F } from '../src/theme';
+import { Dialog } from '../src/dialog';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -94,7 +95,7 @@ export default function SignIn() {
       )}
       <Button label={busy ? 'Signing in…' : 'Sign in'} onPress={submit} loading={busy} />
       <Divider label="or" />
-      <GoogleButton onPress={() => Alert.alert('Coming soon', 'Google sign-in is coming soon. For now, use your email.')} />
+      <GoogleButton onPress={() => Dialog.alert('Coming soon', 'Google sign-in is coming soon. For now, use your email.')} />
 
       <ResetSheet visible={forgot} initialEmail={email.trim()} onClose={() => setForgot(false)} />
     </Screen>

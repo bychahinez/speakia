@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Easing, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState,
@@ -13,6 +13,7 @@ import { draft } from '../../src/draft';
 import { Level } from '../../src/storage';
 import { QUESTIONS, combineLevel, estimateLevel, lastQuiz, setAssessment } from '../../src/placement';
 import { C, F, shadow } from '../../src/theme';
+import { Dialog } from '../../src/dialog';
 
 type Phase = 'idle' | 'recording' | 'processing' | 'review' | 'nospeech' | 'error' | 'assessing';
 const MAX_MS = 45_000;
@@ -147,7 +148,7 @@ export default function PlacementTest() {
   };
 
   const leave = () =>
-    Alert.alert('Leave the test?', 'Your finished answers are kept for when you come back.', [
+    Dialog.alert('Leave the test?', 'Your finished answers are kept for when you come back.', [
       { text: 'Continue test', style: 'cancel' },
       { text: 'Save and leave', onPress: () => router.back() },
     ]);

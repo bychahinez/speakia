@@ -19,7 +19,13 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.speakia.app",
-      "versionCode": 1
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -44,6 +50,12 @@
           "backgroundColor": "#FFFBF5"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ee15e984-58d3-4536-a9a6-74e86501d5f7"
+      }
+    }
   }
 }
