@@ -23,13 +23,14 @@ export default function Intro() {
   // While the learner reads the intro, get the scene and each role's opening line voiced in advance.
   useEffect(() => {
     if (!ep || name === null) return;
-    prepareLines(
-      [...ep.scene, ...ep.roles.map((r) => ({ who: r.partner, text: r.opening }))].map((l) => ({ ...l, text: personalise(l.text, name) }))
-    );
+    const lines = ep.guide
+      ? ep.guide.lines.map((l) => ({ who: ep.guide!.partner, text: l.say }))
+      : [...ep.scene, ...ep.roles.map((r) => ({ who: r.partner, text: r.opening }))];
+    prepareLines(lines.map((l) => ({ ...l, text: personalise(l.text, name) })));
   }, [ep, name]);
 
   if (!ep) return null;
-  const people = Array.from(new Set(ep.scene.map((l) => l.who)));
+  const people = ep.guide ? [ep.guide.partner] : Array.from(new Set(ep.scene.map((l) => l.who)));
 
   return (
     <View style={s.fill}>
@@ -63,10 +64,14 @@ export default function Intro() {
         <View style={s.focus}>
           <Text style={s.focusText}>
             <Text style={{ fontFamily: F.heavy }}>Speaking focus: </Text>
-            {ep.focus.toLowerCase()}. First watch what happens, then step in.
+            {ep.focus.toLowerCase()}.{ep.guide ? ' Sara will talk to you straight away.' : ' First watch what happens, then step in.'}
           </Text>
         </View>
-        <Button label="Watch the scene" onPress={() => router.push({ pathname: '/episode/[id]/watch', params: { id: ep.id } })} />
+        {ep.guide ? (
+          <Button label="Start talking" onPress={() => router.push({ pathname: '/episode/[id]/speak', params: { id: ep.id } })} />
+        ) : (
+          <Button label="Watch the scene" onPress={() => router.push({ pathname: '/episode/[id]/watch', params: { id: ep.id } })} />
+        )}
       </ScrollView>
     </View>
   );

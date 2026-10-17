@@ -57,19 +57,22 @@ export async function nextTurn(args: {
   learnerName?: string;
   history: ChatLine[];
   turn: number;
+  /** guided episodes: the partner's next scripted line (the AI only writes a reaction before it) */
+  next?: string;
 }): Promise<TurnResult> {
-  const { episode, role, level, major, learnerName, history, turn } = args;
+  const { episode, role, level, major, learnerName, history, turn, next } = args;
   if (!API) return demoTurn(role, history, turn, episode.maxTurns);
 
   const partner = CAST[role.partner];
-  const player = CAST[role.player];
+  const player = role.player ? CAST[role.player] : null;
   const res = await fetch(`${API}/turn`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify({
       setting: episode.setting,
       partner: { name: partner.shortName, personality: partner.personality },
-      player: { name: player.shortName },
+      player: player ? { name: player.shortName } : undefined,
+      guided: episode.guide && next !== undefined ? { next, facts: episode.guide.facts } : undefined,
       learnerName,
       goal: role.goal,
       level: band(level),

@@ -60,8 +60,10 @@ type ChatLine = { from: 'you' | 'partner'; text: string };
 type TurnRequest = {
   setting: string;
   partner: { name: string; personality: string };
-  player: { name: string };
+  player?: { name: string };
   learnerName?: string;
+  /** Guided episodes: the partner's next scripted line and the facts it may use to answer questions. */
+  guided?: { next: string; facts: string[] };
   goal: string;
   level: 'Beginner' | 'Intermediate' | 'Advanced';
   major: string;
@@ -141,7 +143,7 @@ function systemPrompt(raw: TurnRequest) {
         : 'Use clear, everyday spoken English (B1-B2 level).';
 
   return `You are ${r.partner.name}, a university student in Algeria (${r.partner.personality}).
-You are in a spoken English roleplay with a learner${r.learnerName ? ` called ${r.learnerName}` : ''}, a fellow student who is on ${r.player.name}'s side.
+You are in a spoken English roleplay with a learner${r.learnerName ? ` called ${r.learnerName}` : ''}, a fellow student who is on ${r.player?.name ?? 'the other'}'s side.
 Setting: ${r.setting}
 The learner's goal: ${r.goal}. The learner studies ${r.major}.
 
@@ -167,12 +169,41 @@ Return ONLY a JSON object with exactly these keys:
 The hints are for the learner's NEXT answer to your reply.`;
 }
 
+/**
+ * Guided episodes: the partner follows the teacher's script. The AI only writes a short reaction to
+ * what the learner just said (answering their question from the facts); the app then plays the
+ * next scripted line, so the reaction must not ask a question or repeat that line.
+ */
+function guidedPrompt(r: TurnRequest, learnerName: string) {
+  const g = r.guided!;
+  const facts = g.facts.slice(0, 20).map((f) => `- ${String(f).slice(0, 300)}`).join('\n');
+  return `You are ${r.partner.name} (${r.partner.personality}) in a spoken English roleplay with a learner${learnerName ? ` called ${learnerName}` : ''}.
+Setting: ${r.setting}
+
+Your NEXT line is fixed and will be said right after your reaction:
+"${String(g.next).slice(0, 600)}"
+
+Write ONLY a short spoken reaction to the learner's LAST message, as a friendly student would:
+- 1 short sentence, max 15 words. Natural and warm. Never correct grammar inside it.
+- If the learner asked a question, answer it briefly using ONLY these facts:
+${facts}
+- If the facts don't cover their question, say you're not sure and suggest asking at Student Services. Never invent details.
+- Do NOT ask a question and do NOT repeat or announce your next line.
+- If the learner used a French or Arabic word, understand it and react naturally.
+
+Return ONLY a JSON object:
+{"reply": "<your reaction>", "bridgeWords": [{"from": "<French/Arabic word used>", "to": "<English word>"}], "corrections": [{"said": "<exact short phrase from the learner's LAST message>", "better": "<corrected phrase>"}]}
+"corrections": at most 2 real mistakes, empty array if none. "bridgeWords": empty array if none.`;
+}
+
 async function turn(req: Request, env: Env) {
   const r = (await req.json()) as TurnRequest;
   if (!r?.history?.length) return json({ error: 'Missing history' }, 400);
+  if (r.guided && (typeof r.guided.next !== 'string' || !Array.isArray(r.guided.facts))) return json({ error: 'Bad guided turn' }, 400);
 
+  const learner = (r.learnerName ?? '').replace(/[^\p{L}\p{M} '-]/gu, '').trim().slice(0, 40);
   const messages = [
-    { role: 'system', content: systemPrompt(r) },
+    { role: 'system', content: r.guided ? guidedPrompt(r, learner) : systemPrompt(r) },
     ...r.history.slice(-12).map((l) => ({
       role: l.from === 'partner' ? 'assistant' : 'user',
       content: l.from === 'partner' ? JSON.stringify({ reply: l.text }) : l.text,
@@ -210,8 +241,8 @@ async function turn(req: Request, env: Env) {
   // Defensive defaults so the app never breaks on a sloppy AI answer.
   const hints = (out.hints ?? {}) as Record<string, string>;
   return json({
-    reply: typeof out.reply === 'string' && out.reply ? out.reply : 'Sorry, can you say that again?',
-    done: Boolean(out.done) || r.turn >= r.maxTurns + 1,
+    reply: typeof out.reply === 'string' && out.reply ? out.reply : r.guided ? '' : 'Sorry, can you say that again?',
+    done: r.guided ? false : Boolean(out.done) || r.turn >= r.maxTurns + 1,
     goalProgress: typeof out.goalProgress === 'number' ? out.goalProgress : Math.min(1, r.turn / r.maxTurns),
     bridgeWords: Array.isArray(out.bridgeWords) ? out.bridgeWords.slice(0, 3) : [],
     hints: {

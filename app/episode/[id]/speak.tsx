@@ -13,7 +13,7 @@ import Character from '../../../src/components/Character';
 import Place from '../../../src/components/Place';
 import { BackButton } from '../../../src/components/BackButton';
 import { CAST } from '../../../src/content/cast';
-import { getEpisode, Hints, personalise } from '../../../src/content/episodes';
+import { getEpisode, guideRole, Hints, personalise } from '../../../src/content/episodes';
 import { ChatLine, isDemo, nextTurn, transcribe, TurnResult } from '../../../src/api';
 import { getProfile, Level } from '../../../src/storage';
 import { say, stopSpeaking } from '../../../src/voice';
@@ -28,9 +28,10 @@ const FREEZE_MS = 6_000;     // offer a hint after 6 s of silence
 export default function Speak() {
   const { id, role: roleParam } = useLocalSearchParams<{ id: string; role: string }>();
   const ep = getEpisode(id)!;
-  const role = ep.roles[Number(roleParam ?? 0)];
+  const guide = ep.guide;
+  const role = guide ? guideRole(guide) : ep.roles[Number(roleParam ?? 0)];
   const partner = CAST[role.partner];
-  const player = CAST[role.player];
+  const player = role.player ? CAST[role.player] : null;
   const { width } = useWindowDimensions();
 
   const [history, setHistory] = useState<ChatLine[]>([]);
@@ -52,6 +53,17 @@ export default function Speak() {
 
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const recState = useAudioRecorderState(recorder, 250);
+
+  // ---- partner speaks: a live reaction first (AI), then the scripted line (voiced in advance) ----
+  const speakParts = (parts: { text: string; live?: boolean }[], after: () => void) => {
+    const queue = parts.filter((p) => p.text.trim());
+    const next = () => {
+      const part = queue.shift();
+      if (!part) return after();
+      speakPartner(part.text, next, part.live);
+    };
+    next();
+  };
 
   // ---- partner speaks ----
   // `live`: AI replies are new text, so they play while the audio is still arriving
@@ -164,9 +176,23 @@ export default function Speak() {
     stats.current.words += text.split(/\s+/).filter(Boolean).length;
     stats.current.speakingMs += spokenMs;
     if (spokenMs > 0) stats.current.spokenTurns += 1;
+    // guided episodes: after answer N the partner says scripted line N
+    const line = guide?.lines[Math.min(turn, guide.lines.length - 1)];
     try {
-      const r = await nextTurn({ episode: ep, role, level: profile.level, major: profile.major, learnerName: profile.name, history: newHistory, turn });
+      const r = await nextTurn({ episode: ep, role, level: profile.level, major: profile.major, learnerName: profile.name, history: newHistory, turn, next: line?.say });
       if (!alive.current) return;
+      if (guide && line) {
+        stats.current.corrections.push(...(r.corrections ?? []));
+        setBridge(r.bridgeWords ?? []);
+        setHints(line.hints ?? hints);
+        setHintLevel(0);
+        const reaction = (r.reply || line.react || '').trim();
+        const said = reaction ? `${reaction} ${line.say}` : line.say;
+        setHistory((h) => [...h, { from: 'partner', text: said }]);
+        const last = turn >= guide.lines.length - 1;
+        speakParts([{ text: reaction, live: true }, { text: line.say }], () => (last ? finish(true, said) : setPhase('you')));
+        return;
+      }
       stats.current.corrections.push(...(r.corrections ?? []));
       setBridge(r.bridgeWords ?? []);
       setHints(r.hints ?? hints);
@@ -211,8 +237,9 @@ export default function Speak() {
       pathname: '/episode/[id]/result',
       params: {
         id: ep.id,
-        player: role.player,
+        player: role.player ?? '',
         partner: role.partner,
+        guided: guide ? '1' : '0',
         hints: String(st.hints),
         words: String(st.words),
         turns: String(st.turns),
@@ -265,7 +292,7 @@ export default function Speak() {
       <KeyboardAvoidingView style={s.sheet} behavior="padding">
         <View style={s.mission}>
           <Text style={s.missionText}>
-            <Text style={{ fontFamily: F.heavy }}>You’re on {player.shortName}’s side. </Text>
+            {player && <Text style={{ fontFamily: F.heavy }}>You’re on {player.shortName}’s side. </Text>}
             {role.mission}
           </Text>
         </View>

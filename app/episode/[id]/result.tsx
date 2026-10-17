@@ -13,7 +13,7 @@ import { C, F } from '../../../src/theme';
 export default function Result() {
   const p = useLocalSearchParams<{
     id: string; player: CastId; partner: CastId; hints: string; words: string; turns: string; ms: string;
-    spoken?: string; convinced?: string; last?: string; corrections: string;
+    spoken?: string; convinced?: string; last?: string; guided?: string; corrections: string;
   }>();
   const ep = getEpisode(p.id)!;
   const hints = Number(p.hints ?? 0);
@@ -31,7 +31,7 @@ export default function Result() {
   useEffect(() => {
     if (saved.current) return; // save once, even if the screen re-renders
     saved.current = true;
-    addAttempt({ episodeId: ep.id, role: CAST[p.player].shortName, stars, hints, words, turns, speakingMs: ms, finishedAt: Date.now() });
+    addAttempt({ episodeId: ep.id, role: p.player ? CAST[p.player as CastId].shortName : 'You', stars, hints, words, turns, speakingMs: ms, finishedAt: Date.now() });
   }, [ep.id, p.player, stars, hints, words, turns, ms]);
 
   const next = EPISODES.find((e) => e.level === ep.level + 1);
@@ -39,7 +39,8 @@ export default function Result() {
   const partnerName = CAST[p.partner].shortName;
   const convinced = p.convinced !== '0'; // older links without the flag count as convinced
   const typedTurns = Math.max(0, turns - Number(p.spoken ?? turns));
-  const tips = nextSteps({ stars, hints, convinced, typedTurns, turns, wordsPerTurn: words / turns, partnerName });
+  const guided = p.guided === '1';
+  const tips = nextSteps({ stars, hints, convinced, typedTurns, turns, wordsPerTurn: words / turns, partnerName, guided });
 
   return (
     <SafeAreaView style={s.fill}>
@@ -51,7 +52,7 @@ export default function Result() {
             ))}
           </View>
           <Label>{`Level ${ep.level} complete · ${label}`}</Label>
-          <Title style={{ textAlign: 'center' }}>{convinced ? `You convinced ${partnerName}.` : 'Scene complete.'}</Title>
+          <Title style={{ textAlign: 'center' }}>{guided ? `${ep.title}: done!` : convinced ? `You convinced ${partnerName}.` : 'Scene complete.'}</Title>
         </View>
 
         <View style={s.partnerRow}>
@@ -108,6 +109,7 @@ export default function Result() {
 /** Up to two pieces of advice that match what actually happened in this scene. */
 function nextSteps(r: {
   stars: number; hints: number; convinced: boolean; typedTurns: number; turns: number; wordsPerTurn: number; partnerName: string;
+  guided: boolean;
 }): string[] {
   const tips: string[] = [];
   if (r.hints > 0) {
@@ -115,7 +117,7 @@ function nextSteps(r: {
       `You used ${r.hints} hint${r.hints > 1 ? 's' : ''}. Answer without hints next time to get ${r.stars === 2 ? 'the third star' : 'more stars'}.`
     );
   }
-  if (!r.convinced) tips.push(`${r.partnerName} isn’t convinced yet. Give two clear reasons, each with “because”, before the scene ends.`);
+  if (!r.guided && !r.convinced) tips.push(`${r.partnerName} isn’t convinced yet. Give two clear reasons, each with “because”, before the scene ends.`);
   if (r.typedTurns > 0) {
     tips.push(
       r.typedTurns === r.turns
@@ -125,7 +127,11 @@ function nextSteps(r: {
   }
   if (r.wordsPerTurn < 8) tips.push(`Your answers were short (about ${Math.round(r.wordsPerTurn)} words). Add a reason or an example to say more.`);
   if (tips.length === 0) {
-    tips.push(`Perfect run: no hints, and you convinced ${r.partnerName}. Replay from the other side of the debate, or go on to the next episode.`);
+    tips.push(
+      r.guided
+        ? `Perfect run: no hints, and full answers every time. Go on to the next episode.`
+        : `Perfect run: no hints, and you convinced ${r.partnerName}. Replay from the other side of the debate, or go on to the next episode.`
+    );
   }
   return tips.slice(0, 2);
 }

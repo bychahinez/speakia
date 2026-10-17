@@ -24,6 +24,7 @@ export default function Role() {
           <Body>Whose side are you on? The other one will try to change your mind.</Body>
         </View>
         {ep.roles.map((r, i) => {
+          if (!r.player) return null; // guided episodes have no sides
           const c = CAST[r.player];
           const selected = pick === i;
           return (
